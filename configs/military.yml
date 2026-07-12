@@ -1,0 +1,46 @@
+data:
+    dataset: "military"
+    image_size: 256
+    patch_size: 64
+    channels: 3
+    num_workers: 4
+    data_dir: "/workspace/real_military_dataset"
+    conditional: True
+    time_step: 4
+logger:
+    logdir: 'logs/military/loss'
+model:
+    in_channels: 12
+    out_ch: 3
+    ch: 64
+    ch_mult: [1, 2, 2, 4]
+    m_size: 8
+    num_res_blocks: 1
+    attn_resolutions: [16]
+    dropout: 0.0
+    ema_rate: 0.999
+    ema: True
+    resamp_with_conv: False
+diffusion:
+    beta_schedule: linear
+    beta_start: 0.0001
+    beta_end: 0.02
+    num_diffusion_timesteps: 1000
+sampling:
+    batch_size: 1
+    sampling_timesteps: 10
+    num_diffusion_timesteps: 1000
+optim:
+    optimizer: "Adam"
+    lr: 0.0001
+    weight_decay: 0.0001
+    beta1: 0.9
+    amsgrad: False
+    eps: 0.00000001
+    grad_clip: 1.0
+training:
+    batch_size: 2
+    n_epochs: 100
+    n_iter: 10000
+    snapshot_freq: 500
+    image_sample_freq: 500
