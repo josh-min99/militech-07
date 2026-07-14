@@ -24,6 +24,10 @@ if [ ! -d "$MODEL_DIR" ]; then
     git clone "$REPO_MODEL" "$MODEL_DIR"
 fi
 
+sed -i '/self.ema_helper.update(self.model)/a\                data_start = time.time()' "$MODEL_DIR/models/ddm.py"
+sed -i 's/torch.load(path)/torch.load(path, weights_only=False)/' "$MODEL_DIR/utils/logging.py"
+sed -i 's/torch.load(path, map_location=device)/torch.load(path, map_location=device, weights_only=False)/' "$MODEL_DIR/utils/logging.py"
+
 echo "=== [2/5] adapter 파일(설정+데이터로더) 덮어쓰기 ==="
 # MA-PDM 원본이 기본적으로 'configs'(복수) 폴더를 읽으므로 이름을 그대로 맞춤 -> 코드 패치 불필요
 mkdir -p "$MODEL_DIR/configs"
