@@ -1,12 +1,4 @@
-#!/bin/bash
-# scripts/bootstrap_ma-pdm.sh (militech-07 저장소 내부 경로)
-#
-# 사용법 (Vast.ai 인스턴스에서):
-#   git clone https://github.com/josh-min99/militech-07.git
-#   bash militech-07/scripts/bootstrap_ma-pdm.sh
-#
-# 데이터(data/real_military_dataset)는 모든 모델이 공유하므로,
-# 이미 존재하면 다운로드를 건너뛰고 adapter 파일 복사 + 패키지 설치만 수행.
+
 set -e
 
 REPO_MODEL="https://github.com/henrryzh1/MA-PDM.git"
