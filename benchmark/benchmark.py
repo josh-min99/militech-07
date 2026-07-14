@@ -38,7 +38,6 @@ LABEL_MAP = {
     'Threat':    'critical maritime security threat',
 }
 
-RESULT_DIR   = r"D:\AI_data\benchmark_results"
 WARMUP_ITERS = 10          # 워밍업 반복 횟수 (측정에서 제외) — 모든 모델 공통
 TIMER_DESC   = "time.perf_counter() + torch.cuda.synchronize()"
 
@@ -178,6 +177,13 @@ class VadCLIPAdapter(ModelAdapter):
 
     def num_parameters(self):
         return sum(p.numel() for p in self.model.parameters())
+
+
+# 모델 어댑터 등록소 — 새 모델을 추가하면 여기에 한 줄만 등록하면
+# `--model <이름>` 으로 선택할 수 있다. (BENCHMARK.md 6절 참고)
+ADAPTERS = {
+    "VadCLIP": VadCLIPAdapter,
+}
 # ══════════════════════════════════════════════════════════════════════════════
 #  [/MODEL ADAPTER]
 # ══════════════════════════════════════════════════════════════════════════════
@@ -244,10 +250,10 @@ def run_pass(adapter, samples, mode, device):
 
 
 # ── 샘플 목록 로드 ─────────────────────────────────────────────────────────────
-def load_samples(test_list, need_images):
+def load_samples(test_list, need_images, frame_data=None):
     import pandas as pd
     df = pd.read_csv(test_list)
-    seq_map = collect_frame_sequences() if need_images else {}
+    seq_map = collect_frame_sequences(frame_data) if need_images else {}
     samples, skipped = [], 0
     for _, row in df.iterrows():
         path    = row["path"]
@@ -271,15 +277,32 @@ def main():
     ap.add_argument('--mode', default='inference',
                     choices=['inference', 'end2end', 'both'],
                     help='inference=features->scores / end2end=images->scores / both=both')
-    ap.add_argument('--model-name', default='VadCLIP')
+    ap.add_argument('--model', default='VadCLIP', choices=list(ADAPTERS),
+                    help='which model adapter to benchmark')
+    ap.add_argument('--model-name', default=None,
+                    help='name saved in the result (default: --model value)')
     ap.add_argument('--note', default='')
+    # 입력/출력 경로 오버라이드 (미지정 시 military_option 기본값 = 환경변수/기본폴더)
+    ap.add_argument('--model-path',  default=None, help='trained weights path')
+    ap.add_argument('--test-list',   default=None, help='test CSV path')
+    ap.add_argument('--frame-data',  default=None, help='raw image root (end2end)')
+    ap.add_argument('--result-dir',  default=None, help='output dir for result JSON')
     args_cli, _ = ap.parse_known_args()
 
     base = military_option.parser.parse_args([])
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    adapter = VadCLIPAdapter(base, device)
-    print(f"[{adapter.name}] loading inference model...")
+    # 경로 확정: CLI 플래그 > military_option 기본값
+    model_name = args_cli.model_name or args_cli.model
+    if args_cli.model_path:
+        base.model_path = args_cli.model_path
+    if args_cli.test_list:
+        base.test_list = args_cli.test_list
+    frame_data = args_cli.frame_data or military_option.FRAME_DATA
+    result_dir = args_cli.result_dir or military_option.RESULT_DIR
+
+    adapter = ADAPTERS[args_cli.model](base, device)
+    print(f"[{adapter.name}] loading inference model... ({base.model_path})")
     adapter.load()
 
     need_e2e = args_cli.mode in ("end2end", "both")
@@ -288,7 +311,7 @@ def main():
         adapter.load_extractor()
 
     record = {
-        "model_name": args_cli.model_name,
+        "model_name": model_name,
         "timestamp":  datetime.now().isoformat(timespec='seconds'),
         "device":     device,
         "gpu":        torch.cuda.get_device_name(0) if device == "cuda" else "cpu",
@@ -313,7 +336,7 @@ def main():
     # ── inference scope ──
     if args_cli.mode in ("inference", "both"):
         samples = load_samples(base.test_list, need_images=False)
-        print(f"[inference] measuring {len(samples)} sequences...")
+        print(f"[inference] measuring {len(samples)} sequences from {base.test_list}")
         metrics, infer_ms, _ = run_pass(adapter, samples, "inference", device)
         total_s = sum(infer_ms) / 1000.0
         record["metrics"] = metrics
@@ -325,8 +348,8 @@ def main():
 
     # ── end2end scope ──
     if args_cli.mode in ("end2end", "both"):
-        samples = load_samples(base.test_list, need_images=True)
-        print(f"[end2end] measuring {len(samples)} sequences...")
+        samples = load_samples(base.test_list, need_images=True, frame_data=frame_data)
+        print(f"[end2end] measuring {len(samples)} sequences (images from {frame_data})")
         metrics_e, infer_ms, extract_ms = run_pass(adapter, samples, "end2end", device)
         total_ms  = [e + i for e, i in zip(extract_ms, infer_ms)]
         num_imgs  = sum(len(s["image_paths"]) for s in samples)
@@ -341,9 +364,9 @@ def main():
             "num_images": num_imgs,
         }
 
-    os.makedirs(RESULT_DIR, exist_ok=True)
+    os.makedirs(result_dir, exist_ok=True)
     ts  = datetime.now().strftime("%Y%m%d_%H%M%S")
-    out = os.path.join(RESULT_DIR, f"{args_cli.model_name}_{args_cli.mode}_{ts}.json")
+    out = os.path.join(result_dir, f"{model_name}_{args_cli.mode}_{ts}.json")
     with open(out, 'w', encoding='utf-8') as f:
         json.dump(record, f, ensure_ascii=False, indent=2)
 

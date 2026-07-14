@@ -11,16 +11,19 @@ import json
 import os
 import argparse
 
-RESULT_DIR = r"D:\AI_data\benchmark_results"
+import military_option
+
+# 기본 결과 폴더 = military_option 의 값(환경변수 AI_DATA_ROOT 반영). --result-dir 로 덮어씀.
+DEFAULT_RESULT_DIR = military_option.RESULT_DIR
 
 
-def load_results() -> list:
+def load_results(result_dir: str) -> list:
     results = []
-    if not os.path.isdir(RESULT_DIR):
+    if not os.path.isdir(result_dir):
         return results
-    for fname in sorted(os.listdir(RESULT_DIR)):
+    for fname in sorted(os.listdir(result_dir)):
         if fname.endswith('.json'):
-            with open(os.path.join(RESULT_DIR, fname), encoding='utf-8') as f:
+            with open(os.path.join(result_dir, fname), encoding='utf-8') as f:
                 results.append(json.load(f))
     return results
 
@@ -42,7 +45,7 @@ def cell(v, f='.4f'):
         return str(v)
 
 
-def print_table(results, sort_by):
+def print_table(results, sort_by, result_dir):
     key = {
         'auc1':  lambda r: r.get('metrics', {}).get('AUC1', 0) or 0,
         'ap1':   lambda r: r.get('metrics', {}).get('AP1', 0) or 0,
@@ -72,7 +75,7 @@ def print_table(results, sort_by):
         ))
     print(sep)
 
-    print(f"\n{len(results)} results  |  sorted by: {sort_by.upper()}  |  dir: {RESULT_DIR}\n")
+    print(f"\n{len(results)} results  |  sorted by: {sort_by.upper()}  |  dir: {result_dir}\n")
     for r in results:
         info = r.get('model_info', {})
         print(f"  [{r.get('model_name')}]  "
@@ -85,13 +88,15 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--sort', default='auc1',
                     choices=['auc1', 'ap1', 'infer', 'e2e'])
+    ap.add_argument('--result-dir', default=DEFAULT_RESULT_DIR,
+                    help='folder with result JSON files')
     args = ap.parse_args()
 
-    results = load_results()
+    results = load_results(args.result_dir)
     if not results:
-        print(f"No result files in: {RESULT_DIR}\nRun 'python benchmark.py' first.")
+        print(f"No result files in: {args.result_dir}\nRun 'python benchmark.py' first.")
         return
-    print_table(results, args.sort)
+    print_table(results, args.sort, args.result_dir)
 
 
 if __name__ == '__main__':

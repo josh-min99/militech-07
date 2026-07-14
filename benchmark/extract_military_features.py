@@ -25,8 +25,8 @@ from collections import defaultdict
 import _env  # noqa: F401  — VadCLIP src를 sys.path에 추가 (clip 패키지 포함)
 from clip import clip
 
-# ── 경로 설정 ──────────────────────────────────────────────────────────────────
-DATA_ROOT   = r"D:\AI_data"
+# ── 경로 설정 (환경변수 AI_DATA_ROOT 로 덮어쓸 수 있음, 기본 D:\AI_data) ─────────
+DATA_ROOT   = os.environ.get("AI_DATA_ROOT", r"D:\AI_data")
 FRAME_DATA  = os.path.join(DATA_ROOT, "Frame_data")
 LABEL_DATA  = os.path.join(DATA_ROOT, "Labeling_data")
 FEATURE_OUT = os.path.join(DATA_ROOT, "features")
@@ -63,16 +63,20 @@ def parse_frame_filename(fname: str):
     return prefix, action, frame_num
 
 
-def collect_frame_sequences() -> dict:
-    """Frame_data 폴더에서 (시퀀스 키 → 이미지 경로 목록) 수집."""
+def collect_frame_sequences(frame_data: str = None) -> dict:
+    """Frame_data 폴더에서 (시퀀스 키 → 이미지 경로 목록) 수집.
+
+    frame_data: 원본 이미지 루트. None이면 모듈 기본값(FRAME_DATA) 사용.
+    """
+    frame_data = frame_data or FRAME_DATA
     sequences = defaultdict(list)
-    for root, _, files in os.walk(FRAME_DATA):
+    for root, _, files in os.walk(frame_data):
         for fname in files:
             if not fname.lower().endswith('.jpg'):
                 continue
             prefix, action, _ = parse_frame_filename(fname)
             # 폴더 경로에서 상위 구분자 추출 (EO/SU/DT 등)
-            rel = os.path.relpath(root, FRAME_DATA)          # EO\SU\DT
+            rel = os.path.relpath(root, frame_data)          # EO\SU\DT
             seq_key = f"{rel.replace(os.sep, '_')}_{action}"
             sequences[seq_key].append(os.path.join(root, fname))
     for key in sequences:
